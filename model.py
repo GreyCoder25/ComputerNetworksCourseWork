@@ -9,11 +9,12 @@ class Node:
 
 class InformationChannel:
 
-    def __init__(self, first_node, second_node, weight, error_prob):
+    def __init__(self, first_node, second_node, weight=2, error_prob=0.0, channel_type='duplex'):
         self.first_node = first_node
         self.second_node = second_node
         self.weight = weight
         self.error_prob = error_prob
+        self.type = channel_type
 
 
 class Packet:
