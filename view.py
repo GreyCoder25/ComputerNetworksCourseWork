@@ -16,21 +16,33 @@ class Node:
         self.node_info = node_params
         self.color = 'white'
         self.active_color = 'cyan'
+        self.width = 2
         self.canvas = canvas
         self.highlighted = False
         self.draw()
         self.set_user_controls()
         self.selected_for_creating_channel = False
+        self.channels_list = []
 
     def draw(self):
         x1 = self.x - self.radius
         x2 = self.x + self.radius
         y1 = self.y - self.radius
         y2 = self.y + self.radius
-        self.image = self.canvas.create_oval(x1, y1, x2, y2, tag='node', fill=self.color, activefill=self.active_color)
+        self.image = self.canvas.create_oval(x1, y1, x2, y2, tag='node',
+                                             width=self.width, fill=self.color, activefill=self.active_color)
 
     def move(self, event):
         self.canvas.move(self.image, event.x - self.x, event.y - self.y)
+        for channel in self.channels_list:
+            if (channel.x1, channel.y1) == (self.x, self.y):
+                self.canvas.coords(channel.image, event.x, event.y, channel.x2, channel.y2)
+                channel.x1 = event.x
+                channel.y1 = event.y
+            elif (channel.x2, channel.y2) == (self.x, self.y):
+                self.canvas.coords(channel.image, channel.x1, channel.y1, event.x, event.y)
+                channel.x2 = event.x
+                channel.y2 = event.y
         self.x = event.x
         self.y = event.y
 
@@ -52,6 +64,8 @@ class Node:
             self.canvas.itemconfig(self.image, outline='red', fill=self.active_color)
 
     def delete(self):
+        for channel in self.channels_list:
+            channel.highlighted = True
         self.canvas.delete(self.image)
 
     def set_user_controls(self):
@@ -83,7 +97,8 @@ class InformationChannel:
             self.arrow = 'both'
         self.image = self.canvas.create_line(self.x1, self.y1, self.x2, self.y2, arrow=self.arrow,
                                              fill=self.color, activefill=self.active_color,
-                                             activewidth=self.active_width)
+                                             width=self.width, activewidth=self.active_width)
+        print(self.image)
 
     def select(self, event):
         if self.highlighted:
@@ -148,12 +163,17 @@ class MainPage(tk.Frame):
         quit_button.pack()
 
     def new_node(self, event):
-        new_node = Node(event.x, event.y, model.Node(), self.canvas)
+        new_node = Node(event.x, event.y, model.NodeInfo(), self.canvas)
         self.nodes_set.add(new_node)
 
     def delete_elements(self, event):
         elements_to_delete = []
-        for element in self.nodes_set.union(self.channels_set):
+        for element in self.nodes_set:
+            if element.highlighted:
+                element.delete()
+                elements_to_delete.append(element)
+        # don't process in union with self.nodes_set to let some things happen before
+        for element in self.channels_set:
             if element.highlighted:
                 element.delete()
                 elements_to_delete.append(element)
@@ -173,11 +193,15 @@ class MainPage(tk.Frame):
         if len(nodes_for_channel) == 2:
             first_node, second_node = nodes_for_channel
             new_channel = InformationChannel(first_node.x, first_node.y, second_node.x, second_node.y,
-                                             model.InformationChannel(first_node.node_info, second_node.node_info),
+                                             model.InformationChannelInfo(first_node.node_info, second_node.node_info),
                                              self.canvas)
             self.channels_set.add(new_channel)
             first_node.select_for_creating_channel(event)
+            first_node.select(event)
+            first_node.channels_list.append(new_channel)
             second_node.select_for_creating_channel(event)
+            second_node.select(event)
+            second_node.channels_list.append(new_channel)
 
 
 class SettingsPage(tk.Frame):

@@ -1,4 +1,4 @@
-class Node:
+class NodeInfo:
 
     def __init__(self):
         self.input_channels_list = []
@@ -7,7 +7,7 @@ class Node:
         # self.address = ''
 
 
-class InformationChannel:
+class InformationChannelInfo:
 
     def __init__(self, first_node, second_node, weight=2, error_prob=0.0, channel_type='duplex'):
         self.first_node = first_node
