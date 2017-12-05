@@ -1,10 +1,11 @@
 class NodeInfo:
 
-    def __init__(self):
+    def __init__(self, id=0):
         self.input_channels_list = []
         self.output_channels_list = []
         self.routing_table = []
-        # self.address = ''
+        self.id = id
+        self.disabled = False
 
 
 class InformationChannelInfo:
@@ -15,6 +16,7 @@ class InformationChannelInfo:
         self.weight = weight
         self.error_prob = error_prob
         self.type = channel_type
+        self.disabled = False
 
 
 class Packet:

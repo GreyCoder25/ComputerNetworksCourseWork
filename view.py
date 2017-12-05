@@ -15,7 +15,10 @@ class Node:
         self.radius = 10
         self.node_info = node_params
         self.color = 'white'
+        self.outline = 'gray'
         self.active_color = 'cyan'
+        self.disabled_color = 'black'
+        self.activeoutline = self.active_color
         self.width = 2
         self.canvas = canvas
         self.highlighted = False
@@ -29,8 +32,9 @@ class Node:
         x2 = self.x + self.radius
         y1 = self.y - self.radius
         y2 = self.y + self.radius
-        self.image = self.canvas.create_oval(x1, y1, x2, y2, tag='node',
-                                             width=self.width, fill=self.color, activefill=self.active_color)
+        self.image = self.canvas.create_oval(x1, y1, x2, y2, tag='node', outline=self.outline,
+                                             activeoutline=self.activeoutline, width=self.width, fill=self.color,
+                                             activefill=self.active_color)
 
     def move(self, event):
         self.canvas.move(self.image, event.x - self.x, event.y - self.y)
@@ -48,17 +52,17 @@ class Node:
 
     def select(self, event):
         if self.highlighted:
-            self.canvas.itemconfig(self.image, fill=self.color)
+            self.canvas.itemconfig(self.image, fill=self.color, outline=self.outline)
             self.highlighted = False
         else:
-            self.canvas.itemconfig(self.image, fill=self.active_color)
+            self.canvas.itemconfig(self.image, fill=self.active_color, outline=self.activeoutline)
             self.highlighted = True
 
     def select_for_creating_channel(self, event):
         self.highlighted = True
         if self.selected_for_creating_channel:
             self.selected_for_creating_channel = False
-            self.canvas.itemconfig(self.image, outline='black', fill=self.active_color)
+            self.canvas.itemconfig(self.image, outline=self.activeoutline, fill=self.active_color)
         else:
             self.selected_for_creating_channel = True
             self.canvas.itemconfig(self.image, outline='red', fill=self.active_color)
@@ -67,6 +71,17 @@ class Node:
         for channel in self.channels_list:
             channel.highlighted = True
         self.canvas.delete(self.image)
+
+    def deactivate(self):
+        if self.node_info.disabled:
+            self.node_info.disabled = False
+            self.color = self.color
+            self.active_color = self.active_color
+        else:
+            self.node_info.disabled = True
+            self.color = self.disabled_color
+            self.active_color = self.disabled_color
+        self.canvas.itemconfig(self.image, fill=self.active_color)
 
     def set_user_controls(self):
         self.canvas.tag_bind(self.image, '<B1-Motion>', self.move)
@@ -85,8 +100,10 @@ class InformationChannel:
         self.y2 = node2.y
         self.channel_params = channel_params
         self.canvas = canvas
-        self.color = 'black'
+        self.color = 'gray'
         self.active_color = 'red'
+        self.disabled_color = 'black'
+        self.current_color = self.color
         self.width = 2
         self.active_width = 3
         self.highlighted = False
@@ -98,7 +115,7 @@ class InformationChannel:
         if self.channel_params.type == 'duplex':
             self.arrow = 'both'
         self.image = self.canvas.create_line(self.x1, self.y1, self.x2, self.y2, arrow=self.arrow,
-                                             fill=self.color, activefill=self.active_color,
+                                             fill=self.current_color, activefill=self.active_color,
                                              width=self.width, activewidth=self.active_width)
 
     def select(self, event):
@@ -113,6 +130,16 @@ class InformationChannel:
         for node in self.adjacent_nodes:
             node.channels_list.remove(self)
         self.canvas.delete(self.image)
+
+    def deactivate(self):
+        if self.channel_params.disabled:
+            self.channel_params.disabled = False
+            self.color = self.color
+            self.active_color = self.active_color
+        else:
+            self.channel_params.disabled = True
+            self.color = self.disabled_color
+            self.active_color = self.disabled_color
 
     def set_user_controls(self):
         self.canvas.tag_bind(self.image, '<Button-1>', self.select)
@@ -159,6 +186,7 @@ class MainPage(tk.Frame):
         self.canvas.bind('<1>', lambda event: self.canvas.focus_set())
         self.canvas.bind('d', self.delete_elements)
         self.canvas.bind('<Button-3>', self.new_channel)
+        self.canvas.bind('s', self.deactivate_elements)
 
         settings_button = tk.Button(self, text="Settings", command=lambda: controller.show_frame(SettingsPage))
         settings_button.pack()
@@ -186,6 +214,11 @@ class MainPage(tk.Frame):
                 self.nodes_set.remove(element)
             elif element in self.channels_set:
                 self.channels_set.remove(element)
+
+    def deactivate_elements(self, event):
+        for element in self.nodes_set.union(self.channels_set):
+            if element.highlighted:
+                element.deactivate()
 
     def new_channel(self, event):
         nodes_for_channel = []
