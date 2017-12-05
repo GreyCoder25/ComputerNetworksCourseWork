@@ -76,11 +76,13 @@ class Node:
 
 class InformationChannel:
 
-    def __init__(self, x1, y1, x2, y2, channel_params, canvas):
-        self.x1 = x1
-        self.y1 = y1
-        self.x2 = x2
-        self.y2 = y2
+    def __init__(self, nodes, channel_params, canvas):
+        self.adjacent_nodes = list(nodes)
+        node1, node2 = self.adjacent_nodes
+        self.x1 = node1.x
+        self.y1 = node1.y
+        self.x2 = node2.x
+        self.y2 = node2.y
         self.channel_params = channel_params
         self.canvas = canvas
         self.color = 'black'
@@ -98,7 +100,6 @@ class InformationChannel:
         self.image = self.canvas.create_line(self.x1, self.y1, self.x2, self.y2, arrow=self.arrow,
                                              fill=self.color, activefill=self.active_color,
                                              width=self.width, activewidth=self.active_width)
-        print(self.image)
 
     def select(self, event):
         if self.highlighted:
@@ -109,6 +110,8 @@ class InformationChannel:
             self.highlighted = True
 
     def delete(self):
+        for node in self.adjacent_nodes:
+            node.channels_list.remove(self)
         self.canvas.delete(self.image)
 
     def set_user_controls(self):
@@ -192,7 +195,7 @@ class MainPage(tk.Frame):
                     nodes_for_channel.append(node)
         if len(nodes_for_channel) == 2:
             first_node, second_node = nodes_for_channel
-            new_channel = InformationChannel(first_node.x, first_node.y, second_node.x, second_node.y,
+            new_channel = InformationChannel((first_node, second_node),
                                              model.InformationChannelInfo(first_node.node_info, second_node.node_info),
                                              self.canvas)
             self.channels_set.add(new_channel)
