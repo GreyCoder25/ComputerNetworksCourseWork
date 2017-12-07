@@ -1,19 +1,18 @@
-import matplotlib as mpl
-mpl.use("TkAgg")
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+# import matplotlib as mpl
+# mpl.use("TkAgg")
+# import matplotlib.pyplot as plt
+# from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import tkinter as tk
-
 import model
 
 
-class Node:
+class NodeView:
 
-    def __init__(self, x, y, node_params, canvas):
+    def __init__(self, x, y, node, canvas):
         self.x = x
         self.y = y
         self.radius = 10
-        self.node_info = node_params
+        self.node = node
         self.color = 'white'
         self.outline = 'gray'
         self.active_color = 'cyan'
@@ -73,12 +72,12 @@ class Node:
         self.canvas.delete(self.image)
 
     def deactivate(self):
-        if self.node_info.disabled:
-            self.node_info.disabled = False
+        if self.node.disabled:
+            self.node.disabled = False
             self.color = self.color
             self.active_color = self.active_color
         else:
-            self.node_info.disabled = True
+            self.node.disabled = True
             self.color = self.disabled_color
             self.active_color = self.disabled_color
         self.canvas.itemconfig(self.image, fill=self.active_color)
@@ -88,17 +87,24 @@ class Node:
         self.canvas.tag_bind(self.image, '<Button-1>', self.select)
         self.canvas.tag_bind(self.image, '<Button-3>', self.select_for_creating_channel)
 
+    def add_channel(self, channel):
+        self.channels_list.append(channel)
+        self.node.add_channel(channel)
 
-class InformationChannel:
+    def delete_channel(self, channel):
+        self.channels_list.remove(channel)
 
-    def __init__(self, nodes, channel_params, canvas):
+
+class InformationChannelView:
+
+    def __init__(self, nodes, channel, canvas):
         self.adjacent_nodes = list(nodes)
         node1, node2 = self.adjacent_nodes
         self.x1 = node1.x
         self.y1 = node1.y
         self.x2 = node2.x
         self.y2 = node2.y
-        self.channel_params = channel_params
+        self.channel = channel
         self.canvas = canvas
         self.color = 'gray'
         self.active_color = 'red'
@@ -112,7 +118,7 @@ class InformationChannel:
         self.set_user_controls()
 
     def draw(self):
-        if self.channel_params.type == 'duplex':
+        if self.channel.type == 'duplex':
             self.arrow = 'both'
         self.image = self.canvas.create_line(self.x1, self.y1, self.x2, self.y2, arrow=self.arrow,
                                              fill=self.current_color, activefill=self.active_color,
@@ -126,18 +132,27 @@ class InformationChannel:
             self.canvas.itemconfig(self.image, fill=self.active_color, width=self.active_width)
             self.highlighted = True
 
+    def change_type(self):
+        if self.highlighted:
+            if self.channel.type == 'duplex':
+                self.channel.type = 'half-duplex'
+                self.canvas.itemconfigure(self.image, arrow='last')
+            else:
+                self.channel.type = 'duplex'
+                self.canvas.itemconfigure(self.image, arrow='both')
+
     def delete(self):
         for node in self.adjacent_nodes:
-            node.channels_list.remove(self)
+            node.delete_channel(self)
         self.canvas.delete(self.image)
 
     def deactivate(self):
-        if self.channel_params.disabled:
-            self.channel_params.disabled = False
+        if self.channel.disabled:
+            self.channel.disabled = False
             self.color = self.color
             self.active_color = self.active_color
         else:
-            self.channel_params.disabled = True
+            self.channel.disabled = True
             self.color = self.disabled_color
             self.active_color = self.disabled_color
 
@@ -185,8 +200,11 @@ class MainPage(tk.Frame):
         self.canvas.bind('<Double-Button-1>', self.new_node)
         self.canvas.bind('<1>', lambda event: self.canvas.focus_set())
         self.canvas.bind('d', self.delete_elements)
+        self.canvas.bind('t', self.change_channels_type)
         self.canvas.bind('<Button-3>', self.new_channel)
         self.canvas.bind('s', self.deactivate_elements)
+
+        # self.canvas.create_line(10, 10, 50, 50, arrow='last')
 
         settings_button = tk.Button(self, text="Settings", command=lambda: controller.show_frame(SettingsPage))
         settings_button.pack()
@@ -194,7 +212,7 @@ class MainPage(tk.Frame):
         quit_button.pack()
 
     def new_node(self, event):
-        new_node = Node(event.x, event.y, model.NodeInfo(), self.canvas)
+        new_node = NodeView(event.x, event.y, model.Node(), self.canvas)
         self.nodes_set.add(new_node)
 
     def delete_elements(self, event):
@@ -220,6 +238,11 @@ class MainPage(tk.Frame):
             if element.highlighted:
                 element.deactivate()
 
+    def change_channels_type(self, event):
+        for channel in self.channels_set:
+            if channel.highlighted:
+                channel.change_type()
+
     def new_channel(self, event):
         nodes_for_channel = []
         for node in self.nodes_set:
@@ -228,16 +251,16 @@ class MainPage(tk.Frame):
                     nodes_for_channel.append(node)
         if len(nodes_for_channel) == 2:
             first_node, second_node = nodes_for_channel
-            new_channel = InformationChannel((first_node, second_node),
-                                             model.InformationChannelInfo(first_node.node_info, second_node.node_info),
-                                             self.canvas)
+            new_channel = InformationChannelView((first_node, second_node),
+                                                 model.InformationChannel(first_node.node, second_node.node),
+                                                 self.canvas)
             self.channels_set.add(new_channel)
             first_node.select_for_creating_channel(event)
             first_node.select(event)
-            first_node.channels_list.append(new_channel)
+            first_node.add_channel(new_channel)
             second_node.select_for_creating_channel(event)
             second_node.select(event)
-            second_node.channels_list.append(new_channel)
+            second_node.add_channel(new_channel)
 
 
 class SettingsPage(tk.Frame):
