@@ -10,18 +10,19 @@ class Node:
     def __init__(self, node_id=0):
         self.channels_list = []
         self.channels_queues = []
-        self.connected = set([])
+        self.connected_nodes = set([])
         self.confirmed = {}
         self.id = node_id
         self.buffer_size = 10
         self.disabled = False
+        print('New node with id %d created' % self.id)
 
     def add_channel(self, channel):
         self.channels_list.append(channel)
         self.channels_queues.append([])
 
     def connected(self, node):
-        return node.id in self.connected
+        return node.id in self.connected_nodes
 
     def packet_confirmed(self, node):
         return self.confirmed[node.id]
@@ -30,15 +31,19 @@ class Node:
         self.confirmed[node.id] = False
 
     def send_packet(self, packet):
+        print('Node %d send %s-packet from %d to %d'% (self.id, packet.type, packet.source_node.id,
+                                                       packet.destination_node.id))
         channel, queue = min(zip(self.channels_list, self.channels_queues), key=lambda pair: len(pair[1]))
         queue.append(packet)
 
     def receive(self, packet, from_channel):
+        print('Node %d receiving %s-packet from %d to %d ' % (self.id, packet.type, packet.source_node.id,
+                                                              packet.destination_node.id))
         if packet.destination_node == self:
             if packet.type == 'connect':
                 self.accept_connection(packet.source_node)
             elif packet.type == 'accept_connection':
-                self.connected.add(packet.source_node.id)
+                self.connected_nodes.add(packet.source_node.id)
                 self.confirmed[packet.source_node.id] = False
             elif packet.type == 'info':
                 self.confirm(packet.source_node)
@@ -47,7 +52,7 @@ class Node:
             elif packet.type == 'disconnect':
                 self.accept_disconnection(packet.source_node)
             elif packet.type == 'accept_disconnection':
-                self.connected.remove(packet.source_node.id)
+                self.connected_nodes.remove(packet.source_node.id)
                 self.confirmed.pop(packet.source_node.id)
         else:
             from_channel_index = self.channels_list.index(from_channel)
@@ -75,6 +80,7 @@ class Node:
         self.send_packet(Packet(self, node, 'accept_disconnection'))
 
     def iteration(self):
+        # print('Node %d iteration' % self.id)
         for channel, queue in zip(self.channels_list, self.channels_queues):
             if channel.available(self):
                 if queue:
@@ -94,7 +100,8 @@ class InformationChannel:
     def __init__(self, first_node, second_node, error_prob=0.05, channel_type='duplex'):
         self.first_node = first_node
         self.second_node = second_node
-        self.weight = CHANNEL_WEIGHTS[rnd.randint(0, len(CHANNEL_WEIGHTS) - 1)]
+        # self.weight = CHANNEL_WEIGHTS[rnd.randint(0, len(CHANNEL_WEIGHTS) - 1)]
+        self.weight = 1
         self.transfer_time_from_first_to_second = 0
         self.transfer_time_from_second_to_first = 0
         self.error_prob = error_prob
@@ -127,6 +134,7 @@ class InformationChannel:
                 self.available_from_second_to_first = status
 
     def transfer_init(self, from_node):
+        print('Channel from %d to %d transfer_init' % (self.first_node.id, self.second_node.id))
         if from_node == self.first_node:
             self.transfer_time_from_first_to_second = self.weight
         elif from_node == self.second_node:
@@ -134,12 +142,14 @@ class InformationChannel:
         self.set_status_for_node(from_node, False)
 
     def transfer_iteration(self):
+        print('Channel from %d to %d transfer_iteration' % (self.first_node.id, self.second_node.id))
         if self.transfer_time_from_first_to_second > 0:
             self.transfer_time_from_first_to_second -= 1
         if self.transfer_time_from_second_to_first > 0:
             self.transfer_time_from_second_to_first -= 1
 
     def transfer_finish(self, packet, from_node, to_node):
+        print('Channel from %d to %d transfer_finish' % (self.first_node.id, self.second_node.id))
         to_node.receive(packet, self)
         self.set_status_for_node(from_node, True)
 
@@ -157,7 +167,8 @@ class Packet:
         self.size = HEADER_SIZE
         self.source_node = source_node
         self.destination_node = destination_node
-        if packet_type == 'info':
+        self.type = packet_type
+        if self.type == 'info':
             self.size += data_size
 
 
@@ -177,14 +188,16 @@ class MessageTransfer:
             else:
                 self.packets_to_send.append(Packet(self.source_node, self.destination_node, 'info', size))
                 size = 0
-        source_node.connect(self.destination_node)
+        self.source_node.connect(self.destination_node)
+        print('New message transfer with message size %d created' % message_size)
 
     def iteration(self):
+        # print('Iteration')
         if self.status == 'connecting':
             if self.source_node.connected(self.destination_node):
                 self.status = 'transferring'
                 if self.packets_to_send:
-                    self.source_node.send(self.packets_to_send.pop(0))
+                    self.source_node.send_packet(self.packets_to_send.pop(0))
         elif self.status == 'transferring':
             if self.source_node.packet_confirmed(self.destination_node):
                 if self.packets_to_send:
