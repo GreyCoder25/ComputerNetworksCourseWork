@@ -166,19 +166,29 @@ class InformationChannelView:
 
 class PacketView:
 
-    def __init__(self, x, y, packet, canvas, packet_id):
+    def __init__(self, x, y, packet, canvas):
         self.x = x
         self.y = y
-        self.height = 10
-        self.width = 16
+        # self.source_node_view = source_node_view
+        # self.destination_node_view = destination_node_view
+        self.height = 24
+        self.width = 70
         self.packet = packet
         self.canvas = canvas
-        self.id = packet_id
 
     def draw(self):
         x0, x1, y0, y1 = self.x - self.width/2, self.x + self.width/2, self.y - self.height/2, self.y + self.height/2
         self.image = self.canvas.create_rectangle(x0, y0, x1, y1, fill='blue')
-        self.text = self.canvas.create_text(self.x, self.y, font=("Arial", 10), color='white', text=str(self.packet.id))
+        self.text = self.canvas.create_text(self.x, self.y, font=("Arial", 6), fill='white',
+                                            text=str(self.packet.type) + "\nfrom %d to %d" % (self.packet.source_node.id,
+                                                                                              self.packet.destination_node.id))
+
+    def move(self):
+        pass
+
+    def delete(self):
+        self.canvas.delete(self.text)
+        self.canvas.delete(self.image)
 
 
 class ComputerNetworksModellingApp(tk.Tk):
@@ -220,6 +230,7 @@ class MainPage(tk.Frame):
         self.nodes_dict = {}
         self.channel_views_set = set([])
         self.messages = []
+        self.packet_views_list = []
         self.channel_view_creating = False
         self.canvas.bind('<Double-Button-1>', self.new_node)
         self.canvas.bind('<1>', lambda event: self.canvas.focus_set())
@@ -242,7 +253,7 @@ class MainPage(tk.Frame):
     def new_node(self, event):
         new_node = NodeView(event.x, event.y, model.Node(self.new_node_id), self.canvas)
         self.nodes_set.add(new_node)
-        self.nodes_dict[self.new_node_id] = new_node.node
+        self.nodes_dict[self.new_node_id] = new_node
         self.new_node_id += 1
 
     def delete_elements(self, event):
@@ -282,8 +293,8 @@ class MainPage(tk.Frame):
         if len(nodes_for_channel) == 2:
             first_node, second_node = nodes_for_channel
             new_channel_view = InformationChannelView((first_node, second_node),
-                                                 model.InformationChannel(first_node.node, second_node.node),
-                                                 self.canvas)
+                                                      model.InformationChannel(first_node.node, second_node.node),
+                                                      self.canvas)
             self.channel_views_set.add(new_channel_view)
             first_node.select_for_creating_channel_view(event)
             first_node.select(event)
@@ -296,16 +307,46 @@ class MainPage(tk.Frame):
         command, arg1, arg2, size = ent.get().split(' ')
         self.send_message(int(arg1), int(arg2), int(size))
 
+    def redraw_packets(self):
+        for packet_view in self.packet_views_list:
+            packet_view.delete()
+        self.packet_views_list = []
+        for channel_view in self.channel_views_set:
+            if channel_view.channel.packet_from_first_to_second is not None:
+                packet = channel_view.channel.packet_from_first_to_second
+                first_node_view = self.nodes_dict[channel_view.channel.first_node.id]
+                second_node_view = self.nodes_dict[channel_view.channel.second_node.id]
+                channel_weight = channel_view.channel.weight
+                dx, dy = (int((second_node_view.x - first_node_view.x) / channel_weight),
+                          int((second_node_view.y - first_node_view.y) / channel_weight))
+                k = channel_weight - channel_view.channel.transfer_time_from_first_to_second
+                new_packet_view = PacketView(first_node_view.x + k*dx, first_node_view.y + k*dy - 20, packet, self.canvas)
+                new_packet_view.draw()
+                self.packet_views_list.append(new_packet_view)
+            elif channel_view.channel.packet_from_second_to_first is not None:
+                packet = channel_view.channel.packet_from_second_to_first
+                first_node_view = self.nodes_dict[channel_view.channel.second_node.id]
+                second_node_view = self.nodes_dict[channel_view.channel.first_node.id]
+                channel_weight = channel_view.channel.weight
+                dx, dy = (int((second_node_view.x - first_node_view.x) / channel_weight),
+                          int((second_node_view.y - first_node_view.y) / channel_weight))
+                k = channel_weight - channel_view.channel.transfer_time_from_second_to_first
+                new_packet_view = PacketView(first_node_view.x + k*dx, first_node_view.y + k*dy - 20, packet, self.canvas)
+                new_packet_view.draw()
+                self.packet_views_list.append(new_packet_view)
+
     def send_message(self, from_node_id, to_node_id, size):
 
-        print(self.nodes_dict)
-        self.messages.append(model.MessageTransfer(size, self.nodes_dict[from_node_id], self.nodes_dict[to_node_id]))
+        # print(self.nodes_dict)
+        self.messages.append(model.MessageTransferWithConnection(size, self.nodes_dict[from_node_id].node,
+                                                   self.nodes_dict[to_node_id].node))
 
     def next_iteration(self):
         for message in self.messages:
             message.iteration()
-        for node in self.nodes_dict.values():
-            node.iteration()
+        for node_view in self.nodes_dict.values():
+            node_view.node.iteration()
+        self.redraw_packets()
 
 
 class SettingsPage(tk.Frame):

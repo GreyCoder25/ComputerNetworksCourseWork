@@ -84,7 +84,7 @@ class Node:
         for channel, queue in zip(self.channels_list, self.channels_queues):
             if channel.available(self):
                 if queue:
-                    channel.transfer_init(self)
+                    channel.transfer_init(self, queue[0])
             else:
                 if channel.transfer_finished(self):
                     channel.transfer_finish(queue.pop(0), self, channel.other_node(self))
@@ -101,9 +101,11 @@ class InformationChannel:
         self.first_node = first_node
         self.second_node = second_node
         # self.weight = CHANNEL_WEIGHTS[rnd.randint(0, len(CHANNEL_WEIGHTS) - 1)]
-        self.weight = 1
+        self.weight = 5
         self.transfer_time_from_first_to_second = 0
         self.transfer_time_from_second_to_first = 0
+        self.packet_from_first_to_second = None
+        self.packet_from_second_to_first = None
         self.error_prob = error_prob
         self.type = channel_type
         self.available_from_first_to_second = True
@@ -133,25 +135,34 @@ class InformationChannel:
             elif node == self.second_node:
                 self.available_from_second_to_first = status
 
-    def transfer_init(self, from_node):
-        print('Channel from %d to %d transfer_init' % (self.first_node.id, self.second_node.id))
+    def transfer_init(self, from_node, packet):
+        print('Channel from %d to %d transfer_init' % (from_node.id, self.other_node(from_node).id))
         if from_node == self.first_node:
             self.transfer_time_from_first_to_second = self.weight
+            self.packet_from_first_to_second = packet
         elif from_node == self.second_node:
             self.transfer_time_from_second_to_first = self.weight
+            self.packet_from_second_to_first = packet
         self.set_status_for_node(from_node, False)
 
     def transfer_iteration(self):
-        print('Channel from %d to %d transfer_iteration' % (self.first_node.id, self.second_node.id))
         if self.transfer_time_from_first_to_second > 0:
             self.transfer_time_from_first_to_second -= 1
+            print('Channel from %d to %d transfer_iteration %d' % (self.first_node.id, self.second_node.id,
+                                                                   self.weight - self.transfer_time_from_first_to_second))
         if self.transfer_time_from_second_to_first > 0:
             self.transfer_time_from_second_to_first -= 1
+            print('Channel from %d to %d transfer_iteration %d' % (self.second_node.id, self.first_node.id,
+                                                                   self.weight - self.transfer_time_from_second_to_first))
 
     def transfer_finish(self, packet, from_node, to_node):
-        print('Channel from %d to %d transfer_finish' % (self.first_node.id, self.second_node.id))
+        print('Channel from %d to %d transfer_finish' % (from_node.id, to_node.id))
         to_node.receive(packet, self)
         self.set_status_for_node(from_node, True)
+        if from_node == self.first_node:
+            self.packet_from_first_to_second = None
+        elif from_node == self.second_node:
+            self.packet_from_second_to_first = None
 
     def transfer_finished(self, from_node):
         if from_node == self.first_node and self.transfer_time_from_first_to_second == 0:
@@ -172,7 +183,7 @@ class Packet:
             self.size += data_size
 
 
-class MessageTransfer:
+class MessageTransferWithConnection:
 
     def __init__(self, message_size, source_node, destination_node):
         self.source_node = source_node
@@ -201,7 +212,7 @@ class MessageTransfer:
         elif self.status == 'transferring':
             if self.source_node.packet_confirmed(self.destination_node):
                 if self.packets_to_send:
-                    self.source_node.send(self.packets_to_send.pop(0))
+                    self.source_node.send_packet(self.packets_to_send.pop(0))
                     self.source_node.reset_confirmation(self.destination_node)
                 else:
                     self.source_node.disconnect(self.destination_node)
