@@ -1,8 +1,71 @@
 import random as rnd
-
+from dijkstra import *
 
 HEADER_SIZE = 20
 PACKET_SIZE = 100
+
+
+class Graph:
+
+    def __init__(self):
+        self.edges = []
+
+    def add_edge(self, v1, v2, weight):
+        self.edges.append((v1, v2, weight))
+        self.edges.append((v2, v1, weight))
+
+    def remove_edge(self, v1, v2):
+        to_delete = []
+        for edge in self.edges:
+            if (edge[0], edge[1]) == (v1, v2) or (edge[0], edge[1]) == (v2, v1):
+                to_delete.append(edge)
+
+        for edge in to_delete:
+            self.edges.remove(edge)
+
+    def remove_vertex(self, v):
+        to_delete = []
+        for edge in self.edges:
+            if edge[0] == v or edge[1] == v:
+                to_delete.append(edge)
+
+        for edge in to_delete:
+            self.edges.remove(edge)
+
+    def shortest_path(self, v1, v2):
+        cost, tmp = dijkstra(self.edges, v1, v2)
+        path = [tmp[0]]
+        while tmp[1]:
+            tmp = tmp[1]
+            path.append(tmp[0])
+
+        return cost, list(reversed(path))
+
+    # def test(self):
+    #     self.add_edge(1, 2, 7)
+    #     self.add_edge(1, 3, 9)
+    #     self.add_edge(1, 6, 14)
+    #     self.add_edge(2, 3, 10)
+    #     self.add_edge(2, 4, 15)
+    #     self.add_edge(3, 4, 11)
+    #     self.add_edge(3, 6, 2)
+    #     self.add_edge(5, 4, 6)
+    #     self.add_edge(5, 6, 9)
+    #
+    #     print(self.shortest_path(1, 4))
+
+network_graph = Graph()
+
+
+class RoutingTableRecord:
+
+    def __init__(self, time, next_node):
+        self.time = time
+        self.next_node = next_node
+
+
+def update_routing_tables(nodes_list):
+
 
 
 class Node:
@@ -11,6 +74,7 @@ class Node:
         self.channels_list = []
         self.channels_queues = []
         self.connected_nodes = set([])
+        self.routing_table = None
         self.confirmed = {}
         self.id = node_id
         self.buffer_size = 10

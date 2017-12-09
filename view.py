@@ -231,6 +231,7 @@ class MainPage(tk.Frame):
         self.channel_views_set = set([])
         self.messages = []
         self.packet_views_list = []
+        self.network_was_updated = False
         self.channel_view_creating = False
         self.canvas.bind('<Double-Button-1>', self.new_node)
         self.canvas.bind('<1>', lambda event: self.canvas.focus_set())
@@ -241,6 +242,8 @@ class MainPage(tk.Frame):
 
         # self.canvas.create_line(10, 10, 50, 50, arrow='last')
         # self.send_message(0)
+        # g = model.Graph()
+        # g.test()
 
         next_iteration_button = tk.Button(self, text="Next iteration", command=self.next_iteration)
         next_iteration_button.pack(side='left')
@@ -255,6 +258,7 @@ class MainPage(tk.Frame):
         self.nodes_set.add(new_node)
         self.nodes_dict[self.new_node_id] = new_node
         self.new_node_id += 1
+        self.network_was_updated = True
 
     def delete_elements(self, event):
         elements_to_delete = []
@@ -266,7 +270,11 @@ class MainPage(tk.Frame):
         for element in self.channel_views_set:
             if element.highlighted:
                 element.delete()
+                model.network_graph.remove_edge(element.channel.first_node.id, element.channel.second_node.id)
                 elements_to_delete.append(element)
+
+        if len(elements_to_delete) > 0:
+            self.network_was_updated = True
 
         for element in elements_to_delete:
             if element in self.nodes_set:
@@ -278,6 +286,7 @@ class MainPage(tk.Frame):
         for element in self.nodes_set.union(self.channel_views_set):
             if element.highlighted:
                 element.deactivate()
+                self.network_was_updated = True
 
     def change_channels_type(self, event):
         for channel_view in self.channel_views_set:
@@ -302,6 +311,8 @@ class MainPage(tk.Frame):
             second_node.select_for_creating_channel_view(event)
             second_node.select(event)
             second_node.add_channel_view(new_channel_view)
+            model.network_graph.add_edge(first_node.node.id, second_node.node.id, new_channel_view.channel.weight)
+        self.network_was_updated = True
 
     def fetch(self, ent):
         command, arg1, arg2, size = ent.get().split(' ')
@@ -342,6 +353,8 @@ class MainPage(tk.Frame):
                                                    self.nodes_dict[to_node_id].node))
 
     def next_iteration(self):
+        if self.network_was_updated:
+            
         for message in self.messages:
             message.iteration()
         for node_view in self.nodes_dict.values():
