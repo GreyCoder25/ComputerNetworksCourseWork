@@ -317,7 +317,7 @@ class MainPage(tk.Frame):
 
     def fetch(self, ent):
         command, arg1, arg2, size = ent.get().split(' ')
-        self.send_message(int(arg1), int(arg2), int(size))
+        self.send_message(command, int(arg1), int(arg2), int(size))
 
     def redraw_packets(self):
         for packet_view in self.packet_views_list:
@@ -347,11 +347,15 @@ class MainPage(tk.Frame):
                 new_packet_view.draw()
                 self.packet_views_list.append(new_packet_view)
 
-    def send_message(self, from_node_id, to_node_id, size):
+    def send_message(self, command, from_node_id, to_node_id, size):
 
         self.check_network_update()
-        self.messages.append(model.MessageTransferWithConnection(size, self.nodes_dict[from_node_id].node,
-                                                                 self.nodes_dict[to_node_id].node))
+        if command == 'sendcon':
+            self.messages.append(model.MessageTransferWithConnection(size, self.nodes_dict[from_node_id].node,
+                                                                     self.nodes_dict[to_node_id].node))
+        elif command == 'datagram':
+            self.messages.append(model.DatagramMessageTransfer(size, self.nodes_dict[from_node_id].node,
+                                                                     self.nodes_dict[to_node_id].node))
 
     def check_network_update(self):
         if self.network_was_updated:

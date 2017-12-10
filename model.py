@@ -263,13 +263,12 @@ class Packet:
             self.size += data_size
 
 
-class MessageTransferWithConnection:
+class MessageTransfer:
 
     def __init__(self, message_size, source_node, destination_node):
         self.source_node = source_node
         self.destination_node = destination_node
         self.packets_to_send = []
-        self.status = 'connecting'
         size = message_size
         data_size = PACKET_SIZE - HEADER_SIZE
         while size > 0:
@@ -279,8 +278,17 @@ class MessageTransferWithConnection:
             else:
                 self.packets_to_send.append(Packet(self.source_node, self.destination_node, 'info', size))
                 size = 0
+
+
+class MessageTransferWithConnection(MessageTransfer):
+
+    def __init__(self, message_size, source_node, destination_node):
+        MessageTransfer.__init__(self, message_size, source_node, destination_node)
         self.source_node.connect(self.destination_node)
-        print('New message transfer with message size %d created' % message_size)
+        self.status = 'connecting'
+        print('New message transfer with connection from %d to %d created. Message size: %d' % (self.source_node.id,
+                                                                                                self.destination_node.id,
+                                                                                                message_size))
 
     def iteration(self):
         # print('Iteration')
@@ -302,3 +310,16 @@ class MessageTransferWithConnection:
                 self.status = 'finished'
 
 
+class DatagramMessageTransfer(MessageTransfer):
+
+    def __init__(self, message_size, source_node, destination_node):
+        MessageTransfer.__init__(self, message_size, source_node, destination_node)
+        for packet in self.packets_to_send:
+            packet.type = 'datagram'
+        print('New datagram message transfer from %d to %d created. Message size: %d' % (self.source_node.id,
+                                                                                                self.destination_node.id,
+                                                                                                message_size))
+
+    def iteration(self):
+        while self.packets_to_send:
+            self.source_node.send_packet(self.packets_to_send.pop(0))
