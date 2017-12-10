@@ -41,11 +41,13 @@ class NodeView:
         self.canvas.move(self.text, event.x - self.x, event.y - self.y)
         for channel_view in self.channel_views_list:
             if (channel_view.x1, channel_view.y1) == (self.x, self.y):
-                self.canvas.coords(channel_view.image, event.x, event.y, channel_view.x2, channel_view.y2)
+                # self.canvas.coords(channel_view.image, event.x, event.y, channel_view.x2, channel_view.y2)
+                channel_view.update(event.x, event.y, channel_view.x2, channel_view.y2)
                 channel_view.x1 = event.x
                 channel_view.y1 = event.y
             elif (channel_view.x2, channel_view.y2) == (self.x, self.y):
-                self.canvas.coords(channel_view.image, channel_view.x1, channel_view.y1, event.x, event.y)
+                # self.canvas.coords(channel_view.image, channel_view.x1, channel_view.y1, event.x, event.y)
+                channel_view.update(channel_view.x1, channel_view.y1, event.x, event.y)
                 channel_view.x2 = event.x
                 channel_view.y2 = event.y
         self.x = event.x
@@ -127,6 +129,12 @@ class InformationChannelView:
         self.image = self.canvas.create_line(self.x1, self.y1, self.x2, self.y2, arrow=self.arrow,
                                              fill=self.current_color, activefill=self.active_color,
                                              width=self.width, activewidth=self.active_width)
+        self.text = self.canvas.create_text(int((self.x1 + self.x2)/2), int((self.y1 + self.y2)/2 - 14),
+                                            font=("Arial", 10), text=str(self.channel.weight))
+
+    def update(self, x0, y0, x1, y1):
+        self.canvas.coords(self.image, x0, y0, x1, y1)
+        self.canvas.coords(self.text, int((x0 + x1)/2), int((y0 + y1)/2 - 14))
 
     def select(self, event):
         if self.highlighted:
@@ -182,9 +190,6 @@ class PacketView:
         self.text = self.canvas.create_text(self.x, self.y, font=("Arial", 6), fill='white',
                                             text=str(self.packet.type) + "\nfrom %d to %d" % (self.packet.source_node.id,
                                                                                               self.packet.destination_node.id))
-
-    def move(self):
-        pass
 
     def delete(self):
         self.canvas.delete(self.text)
@@ -273,9 +278,6 @@ class MainPage(tk.Frame):
                 model.network_graph.remove_edge(element.channel.first_node.id, element.channel.second_node.id)
                 elements_to_delete.append(element)
 
-        if len(elements_to_delete) > 0:
-            self.network_was_updated = True
-
         for element in elements_to_delete:
             if element in self.nodes_set:
                 self.nodes_set.remove(element)
@@ -286,7 +288,6 @@ class MainPage(tk.Frame):
         for element in self.nodes_set.union(self.channel_views_set):
             if element.highlighted:
                 element.deactivate()
-                self.network_was_updated = True
 
     def change_channels_type(self, event):
         for channel_view in self.channel_views_set:
@@ -348,13 +349,20 @@ class MainPage(tk.Frame):
 
     def send_message(self, from_node_id, to_node_id, size):
 
-        # print(self.nodes_dict)
+        self.check_network_update()
         self.messages.append(model.MessageTransferWithConnection(size, self.nodes_dict[from_node_id].node,
-                                                   self.nodes_dict[to_node_id].node))
+                                                                 self.nodes_dict[to_node_id].node))
+
+    def check_network_update(self):
+        if self.network_was_updated:
+            nodes_list = []
+            for node_view in self.nodes_set:
+                nodes_list.append(node_view.node)
+            model.update_routing_tables(nodes_list)
+            self.network_was_updated = False
 
     def next_iteration(self):
-        if self.network_was_updated:
-            
+        self.check_network_update()
         for message in self.messages:
             message.iteration()
         for node_view in self.nodes_dict.values():

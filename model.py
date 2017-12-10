@@ -57,15 +57,29 @@ class Graph:
 network_graph = Graph()
 
 
+class RoutingTable:
+
+    def __init__(self, nodes_list):
+        self.table = {}
+        for node in nodes_list:
+            self.table[node.id] = {}
+        # print(self.table)
+
+
 class RoutingTableRecord:
 
-    def __init__(self, time, next_node):
+    def __init__(self, time, path):
         self.time = time
-        self.next_node = next_node
+        self.path = path
 
 
 def update_routing_tables(nodes_list):
-
+    for node in nodes_list:
+        node.routing_table = RoutingTable(nodes_list)
+        for node1 in nodes_list:
+            for node2 in nodes_list:
+                node.routing_table.table[node1.id][node2.id] = RoutingTableRecord(*network_graph.shortest_path(node1.id, node2.id))
+        # print(node.routing_table.table)
 
 
 class Node:
@@ -97,7 +111,9 @@ class Node:
     def send_packet(self, packet):
         print('Node %d send %s-packet from %d to %d'% (self.id, packet.type, packet.source_node.id,
                                                        packet.destination_node.id))
-        channel, queue = min(zip(self.channels_list, self.channels_queues), key=lambda pair: len(pair[1]))
+        channel, queue = min(zip(self.channels_list, self.channels_queues),
+                             key=lambda pair: self.routing_table.table[pair[0].other_node(self).id][packet.destination_node.id].time +
+                                              (len(pair[1]) + 1)*pair[0].weight)
         queue.append(packet)
 
     def receive(self, packet, from_channel):
@@ -164,8 +180,8 @@ class InformationChannel:
     def __init__(self, first_node, second_node, error_prob=0.05, channel_type='duplex'):
         self.first_node = first_node
         self.second_node = second_node
-        # self.weight = CHANNEL_WEIGHTS[rnd.randint(0, len(CHANNEL_WEIGHTS) - 1)]
-        self.weight = 5
+        self.weight = CHANNEL_WEIGHTS[:4][rnd.randint(0, len(CHANNEL_WEIGHTS[:4]) - 1)]
+        # self.weight = 5
         self.transfer_time_from_first_to_second = 0
         self.transfer_time_from_second_to_first = 0
         self.packet_from_first_to_second = None
