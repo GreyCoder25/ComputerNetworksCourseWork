@@ -1,8 +1,10 @@
 import random as rnd
+import math
 from dijkstra import *
 
 HEADER_SIZE = 20
 PACKET_SIZE = 100
+TRANSFER_SPEED = 1000
 
 
 class Graph:
@@ -184,6 +186,8 @@ class InformationChannel:
         # self.weight = 5
         self.transfer_time_from_first_to_second = 0
         self.transfer_time_from_second_to_first = 0
+        self.transfer_time_from_first_to_second_left = 0
+        self.transfer_time_from_second_to_first_left = 0
         self.packet_from_first_to_second = None
         self.packet_from_second_to_first = None
         self.error_prob = error_prob
@@ -218,22 +222,29 @@ class InformationChannel:
     def transfer_init(self, from_node, packet):
         print('Channel from %d to %d transfer_init' % (from_node.id, self.other_node(from_node).id))
         if from_node == self.first_node:
-            self.transfer_time_from_first_to_second = self.weight
+            self.transfer_time_from_first_to_second = self._transfer_time(packet)
+            self.transfer_time_from_first_to_second_left = self.transfer_time_from_first_to_second
             self.packet_from_first_to_second = packet
         elif from_node == self.second_node:
-            self.transfer_time_from_second_to_first = self.weight
+            self.transfer_time_from_second_to_first = self._transfer_time(packet)
+            self.transfer_time_from_second_to_first_left = self.transfer_time_from_second_to_first
             self.packet_from_second_to_first = packet
         self.set_status_for_node(from_node, False)
 
+    def _transfer_time(self, packet):
+        return int(math.ceil(packet.size*self.weight / TRANSFER_SPEED))
+
     def transfer_iteration(self):
-        if self.transfer_time_from_first_to_second > 0:
-            self.transfer_time_from_first_to_second -= 1
+        if self.transfer_time_from_first_to_second_left > 0:
+            self.transfer_time_from_first_to_second_left -= 1
             print('Channel from %d to %d transfer_iteration %d' % (self.first_node.id, self.second_node.id,
-                                                                   self.weight - self.transfer_time_from_first_to_second))
-        if self.transfer_time_from_second_to_first > 0:
-            self.transfer_time_from_second_to_first -= 1
+                                                                   self.transfer_time_from_first_to_second
+                                                                   - self.transfer_time_from_first_to_second_left))
+        if self.transfer_time_from_second_to_first_left > 0:
+            self.transfer_time_from_second_to_first_left -= 1
             print('Channel from %d to %d transfer_iteration %d' % (self.second_node.id, self.first_node.id,
-                                                                   self.weight - self.transfer_time_from_second_to_first))
+                                                                   self.transfer_time_from_second_to_first
+                                                                   - self.transfer_time_from_second_to_first_left))
 
     def transfer_finish(self, packet, from_node, to_node):
         print('Channel from %d to %d transfer_finish' % (from_node.id, to_node.id))
@@ -241,13 +252,15 @@ class InformationChannel:
         self.set_status_for_node(from_node, True)
         if from_node == self.first_node:
             self.packet_from_first_to_second = None
+            self.transfer_time_from_first_to_second = 0
         elif from_node == self.second_node:
             self.packet_from_second_to_first = None
+            self.transfer_time_from_second_to_first = 0
 
     def transfer_finished(self, from_node):
-        if from_node == self.first_node and self.transfer_time_from_first_to_second == 0:
+        if from_node == self.first_node and self.transfer_time_from_first_to_second_left == 0:
             return True
-        if from_node == self.second_node and self.transfer_time_from_second_to_first == 0:
+        if from_node == self.second_node and self.transfer_time_from_second_to_first_left == 0:
             return True
         return False
 
@@ -255,6 +268,7 @@ class InformationChannel:
 class Packet:
 
     def __init__(self, source_node, destination_node, packet_type, data_size=0):
+        self.header_size = HEADER_SIZE
         self.size = HEADER_SIZE
         self.source_node = source_node
         self.destination_node = destination_node
@@ -265,12 +279,13 @@ class Packet:
 
 class MessageTransfer:
 
-    def __init__(self, message_size, source_node, destination_node):
+    def __init__(self, message_size, source_node, destination_node, data_size):
         self.source_node = source_node
         self.destination_node = destination_node
         self.packets_to_send = []
         size = message_size
-        data_size = PACKET_SIZE - HEADER_SIZE
+        # data_size = PACKET_SIZE - HEADER_SIZE
+        data_size = data_size
         while size > 0:
             if size >= data_size:
                 self.packets_to_send.append(Packet(self.source_node, self.destination_node, 'info', data_size))
@@ -282,8 +297,8 @@ class MessageTransfer:
 
 class MessageTransferWithConnection(MessageTransfer):
 
-    def __init__(self, message_size, source_node, destination_node):
-        MessageTransfer.__init__(self, message_size, source_node, destination_node)
+    def __init__(self, message_size, source_node, destination_node, data_size):
+        MessageTransfer.__init__(self, message_size, source_node, destination_node, data_size)
         self.source_node.connect(self.destination_node)
         self.status = 'connecting'
         print('New message transfer with connection from %d to %d created. Message size: %d' % (self.source_node.id,
@@ -312,8 +327,8 @@ class MessageTransferWithConnection(MessageTransfer):
 
 class DatagramMessageTransfer(MessageTransfer):
 
-    def __init__(self, message_size, source_node, destination_node):
-        MessageTransfer.__init__(self, message_size, source_node, destination_node)
+    def __init__(self, message_size, source_node, destination_node, data_size):
+        MessageTransfer.__init__(self, message_size, source_node, destination_node, data_size)
         for packet in self.packets_to_send:
             packet.type = 'datagram'
         print('New datagram message transfer from %d to %d created. Message size: %d' % (self.source_node.id,

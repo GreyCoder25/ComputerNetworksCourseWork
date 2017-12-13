@@ -4,6 +4,7 @@
 # from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import tkinter as tk
 import model
+import time
 
 
 class NodeView:
@@ -157,6 +158,7 @@ class InformationChannelView:
         for node in self.adjacent_nodes:
             node.delete_channel_view(self)
         self.canvas.delete(self.image)
+        self.canvas.delete(self.text)
 
     def deactivate(self):
         if self.channel.disabled:
@@ -226,7 +228,7 @@ class MainPage(tk.Frame):
     def __init__(self, parent, controller):
         tk.Frame.__init__(self, parent)
         self.controller = controller
-
+        self.iteration = 0
         self.canvas = tk.Canvas(width=1000, height=600, bg='white')
         self.canvas.pack(expand='YES', fill='both')
         self.new_node_id = 0
@@ -252,6 +254,8 @@ class MainPage(tk.Frame):
 
         next_iteration_button = tk.Button(self, text="Next iteration", command=self.next_iteration)
         next_iteration_button.pack(side='left')
+        full_simulation_button = tk.Button(self, text="Full simulation", command=self.full_simulation)
+        full_simulation_button.pack(side='left')
         quit_button = tk.Button(self, text="Quit", command=self.quit)
         quit_button.pack(side='right')
         menu = tk.Entry(self)
@@ -316,8 +320,9 @@ class MainPage(tk.Frame):
         self.network_was_updated = True
 
     def fetch(self, ent):
-        command, arg1, arg2, size = ent.get().split(' ')
-        self.send_message(command, int(arg1), int(arg2), int(size))
+        command, arg1, arg2, size, data_size = ent.get().split(' ')
+        data_size = data_size.split('=')[1]
+        self.send_message(command, int(arg1), int(arg2), int(size), int(data_size))
 
     def redraw_packets(self):
         for packet_view in self.packet_views_list:
@@ -328,10 +333,10 @@ class MainPage(tk.Frame):
                 packet = channel_view.channel.packet_from_first_to_second
                 first_node_view = self.nodes_dict[channel_view.channel.first_node.id]
                 second_node_view = self.nodes_dict[channel_view.channel.second_node.id]
-                channel_weight = channel_view.channel.weight
-                dx, dy = (int((second_node_view.x - first_node_view.x) / channel_weight),
-                          int((second_node_view.y - first_node_view.y) / channel_weight))
-                k = channel_weight - channel_view.channel.transfer_time_from_first_to_second
+                transfer_time = channel_view.channel.transfer_time_from_first_to_second
+                dx, dy = (int((second_node_view.x - first_node_view.x) / transfer_time),
+                          int((second_node_view.y - first_node_view.y) / transfer_time))
+                k = transfer_time - channel_view.channel.transfer_time_from_first_to_second_left
                 new_packet_view = PacketView(first_node_view.x + k*dx, first_node_view.y + k*dy - 20, packet, self.canvas)
                 new_packet_view.draw()
                 self.packet_views_list.append(new_packet_view)
@@ -339,23 +344,23 @@ class MainPage(tk.Frame):
                 packet = channel_view.channel.packet_from_second_to_first
                 first_node_view = self.nodes_dict[channel_view.channel.second_node.id]
                 second_node_view = self.nodes_dict[channel_view.channel.first_node.id]
-                channel_weight = channel_view.channel.weight
-                dx, dy = (int((second_node_view.x - first_node_view.x) / channel_weight),
-                          int((second_node_view.y - first_node_view.y) / channel_weight))
-                k = channel_weight - channel_view.channel.transfer_time_from_second_to_first
+                transfer_time = channel_view.channel.transfer_time_from_second_to_first
+                dx, dy = (int((second_node_view.x - first_node_view.x) / transfer_time),
+                          int((second_node_view.y - first_node_view.y) / transfer_time))
+                k = transfer_time - channel_view.channel.transfer_time_from_second_to_first_left
                 new_packet_view = PacketView(first_node_view.x + k*dx, first_node_view.y + k*dy - 20, packet, self.canvas)
                 new_packet_view.draw()
                 self.packet_views_list.append(new_packet_view)
 
-    def send_message(self, command, from_node_id, to_node_id, size):
-
+    def send_message(self, command, from_node_id, to_node_id, size, data_size):
+        self.iteration = 0
         self.check_network_update()
         if command == 'sendcon':
             self.messages.append(model.MessageTransferWithConnection(size, self.nodes_dict[from_node_id].node,
-                                                                     self.nodes_dict[to_node_id].node))
+                                                                     self.nodes_dict[to_node_id].node, data_size))
         elif command == 'datagram':
             self.messages.append(model.DatagramMessageTransfer(size, self.nodes_dict[from_node_id].node,
-                                                                     self.nodes_dict[to_node_id].node))
+                                                                     self.nodes_dict[to_node_id].node, data_size))
 
     def check_network_update(self):
         if self.network_was_updated:
@@ -372,6 +377,18 @@ class MainPage(tk.Frame):
         for node_view in self.nodes_dict.values():
             node_view.node.iteration()
         self.redraw_packets()
+        self.iteration += 1
+        print('Iteration %d' % self.iteration)
+
+    def _all_transfers_finished(self):
+        for message in self.messages:
+            if message.status != 'finished':
+                return False
+        return True
+
+    def full_simulation(self):
+        while not self._all_transfers_finished():
+            self.next_iteration()
 
 
 class SettingsPage(tk.Frame):
